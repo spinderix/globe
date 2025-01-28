@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenLayers Globe Visualization</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@6.9.0/ol.css" />
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #map { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://cdn.jsdelivr.net/npm/ol@6.9.0/dist/ol.js"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script>
+        // Create an OpenLayers map
+        const map = new ol.Map({
+            target: 'map',
+            view: new ol.View({
+                projection: 'EPSG:4326',
+                center: [0, 0],
+                zoom: 2
+            }),
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                })
+            ]
+        });
+
+        // Create a layer for the points
+        const pointsLayer = new ol.layer.Vector({
+            source: new ol.source.Vector()
+        });
+
+        map.addLayer(pointsLayer);
+
+        // Load and parse the CSV file
+        d3.csv('../data/random_data.csv').then(data => {
+            data.forEach(d => {
+                const latitude = parseFloat(d.latitude);
+                const longitude = parseFloat(d.longitude);
+                const numSerials = parseInt(d.num_serials, 10);
+
+                // Create a feature for each data entry
+                const feature = new ol.Feature({
+                    geometry: new ol.geom.Point([longitude, latitude]),
+                    numSerials: numSerials
+                });
+
+                // Style the feature as a small yellow point
+                feature.setStyle(new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 5,
+                        fill: new ol.style.Fill({ color: 'yellow' }),
+                        stroke: new ol.style.Stroke({ color: 'yellow', width: 1 })
+                    })
+                }));
+
+                // Add the feature to the layer
+                pointsLayer.getSource().addFeature(feature);
+            });
+
+            // Zoom to the extent of the points
+            const extent = pointsLayer.getSource().getExtent();
+            map.getView().fit(extent, { maxZoom: 4 });
+        });
+
+        // Rotate the globe
+        let rotate = 0;
+        const rotateView = () => {
+            rotate += 0.001;
+            map.getView().setRotation(rotate);
+            requestAnimationFrame(rotateView);
+        };
+        rotateView();
+    </script>
+</body>
+</html>

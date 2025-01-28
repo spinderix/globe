@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Globe with Three.js</title>
+  <style>
+    body { margin: 0; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r146/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Create a globe
+    const globeGeometry = new THREE.SphereGeometry(5, 32, 32);
+    const globeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+    const globe = new THREE.Mesh(globeGeometry, globeMaterial);
+    scene.add(globe);
+
+    // Function to convert lat/long to 3D coordinates
+    function latLongToVector3(lat, long, radius) {
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (long + 180) * (Math.PI / 180);
+      return new THREE.Vector3(
+        -radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.cos(phi),
+        radius * Math.sin(phi) * Math.sin(theta)
+      );
+    }
+
+    // Load CSV data
+    Papa.parse("../data/random_data.csv", {
+      download: true,
+      header: true,
+      dynamicTyping: true,
+      complete: function (results) {
+        results.data.forEach(row => {
+          if (row.latitude && row.longitude) {
+            const point = latLongToVector3(row.latitude, row.longitude, 5);
+            const pointGeometry = new THREE.SphereGeometry(0.1 * row.num_serials, 16, 16);
+            const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const marker = new THREE.Mesh(pointGeometry, pointMaterial);
+            marker.position.set(point.x, point.y, point.z);
+            scene.add(marker);
+          }
+        });
+      },
+    });
+
+    // Render the scene
+    camera.position.z = 15;
+    function animate() {
+      requestAnimationFrame(animate);
+      globe.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

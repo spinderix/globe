@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cesium Globe Visualization</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.84.0/Widgets/widgets.css" />
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #cesiumContainer { width: 100vw; height: 100vh; display: block; }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.84.0/Cesium.js"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script>
+        // Initialize Cesium Viewer with OpenStreetMap imagery
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            imageryProvider: new Cesium.OpenStreetMapImageryProvider({
+                url: 'https://a.tile.openstreetmap.org/'
+            }),
+            baseLayerPicker: false
+        });
+
+        // Load and parse the CSV file
+        d3.csv('../data/random_data.csv').then(data => {
+            data.forEach(d => {
+                const latitude = parseFloat(d.latitude);
+                const longitude = parseFloat(d.longitude);
+                const numSerials = parseInt(d.num_serials, 10);
+
+                // Create a point for each data entry
+                viewer.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(longitude, latitude),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.YELLOW,
+                        outlineColor: Cesium.Color.YELLOW,
+                        outlineWidth: 1,
+                    },
+                    description: `Number of Serials: ${numSerials}`
+                });
+            });
+
+            // Fly to the points
+            if (data.length > 0) {
+                viewer.flyTo(viewer.entities);
+            }
+        });
+
+        // Rotate the globe slowly
+        viewer.scene.preRender.addEventListener(() => {
+            const icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(viewer.clock.currentTime);
+            if (Cesium.defined(icrfToFixed)) {
+                viewer.scene.camera.lookAtTransform(icrfToFixed);
+            }
+        });
+    </script>
+</body>
+</html>

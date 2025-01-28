@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Globe Visualization</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <canvas id="globeCanvas"></canvas>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+    <script>
+        // Initialize WebGL
+        const canvas = document.getElementById('globeCanvas');
+        const gl = canvas.getContext('webgl');
+
+        if (!gl) {
+            alert('WebGL not supported, falling back on experimental-webgl');
+            gl = canvas.getContext('experimental-webgl');
+        }
+
+        if (!gl) {
+            alert('Your browser does not support WebGL');
+        }
+
+        // Vertex shader program
+        const vsSource = `
+            attribute vec4 aVertexPosition;
+            attribute vec4 aVertexColor;
+            uniform mat4 uModelViewMatrix;
+            uniform mat4 uProjectionMatrix;
+            varying lowp vec4 vColor;
+            void main(void) {
+                gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                vColor = aVertexColor;
+            }
+        `;
+
+        // Fragment shader program
+        const fsSource = `
+            varying lowp vec4 vColor;
+            void main(void) {
+                gl_FragColor = vColor;
+            }
+        `;
+
+        // Compile shader program
+        function loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        const shaderProgram = gl.createProgram();
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+        if (vertexShader && fragmentShader) {
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+            }
+
+            const programInfo = {
+                program: shaderProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+                    vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+                },
+                uniformLocations: {
+                    projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+                },
+            };
+
+            // Sphere generation and drawing
+            function createSphere(radius, latitudeBands, longitudeBands) {
+                const vertices = [];
+                const colors = [];
+
+                for (let lat = 0; lat <= latitudeBands; lat++) {
+                    const theta = lat * Math.PI / latitudeBands;
+                    const sinTheta = Math.sin(theta);
+                    const cosTheta = Math.cos(theta);
+
+                    for (let lon = 0; lon <= longitudeBands; lon++) {
+                        const phi = lon * 2 * Math.PI / longitudeBands;
+                        const sinPhi = Math.sin(phi);
+                        const cosPhi = Math.cos(phi);
+
+                        const x = cosPhi * sinTheta;
+                        const y = cosTheta;
+                        const z = sinPhi * sinTheta;
+                        vertices.push(radius * x, radius * y, radius * z);
+
+                        colors.push(0.0, 0.0, 1.0, 1.0);
+                    }
+                }
+
+                return {
+                    vertices: new Float32Array(vertices),
+                    colors: new Float32Array(colors),
+                };
+            }
+
+            const sphere = createSphere(5, 30, 30);
+
+            // Create buffer and load data
+            function initBuffers(gl) {
+                const vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, sphere.vertices, gl.STATIC_DRAW);
+
+                const colorBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, sphere.colors, gl.STATIC_DRAW);
+
+                return {
+                    vertex: vertexBuffer,
+                    color: colorBuffer,
+                };
+            }
+
+            const buffers = initBuffers(gl);
+
+            // Draw the scene
+            function drawScene(gl, programInfo, buffers) {
+                gl.clearColor(0.0, 0.0, 0.0, 1.0);
+                gl.clearDepth(1.0);
+                gl.enable(gl.DEPTH_TEST);
+                gl.depthFunc(gl.LEQUAL);
+
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+                const fieldOfView = 45 * Math.PI / 180;
+                const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+                const zNear = 0.1;
+                const zFar = 100.0;
+                const projectionMatrix = mat4.create();
+
+                mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
+
+                const modelViewMatrix = mat4.create();
+                mat4.translate(modelViewMatrix, modelViewMatrix, [-0.0, 0.0, -20.0]);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertex);
+                gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
+                gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
+
+                gl.useProgram(programInfo.program);
+
+                gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+                gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+
+                gl.drawArrays(gl.POINTS, 0, sphere.vertices.length / 3);
+            }
+
+            drawScene(gl, programInfo, buffers);
+
+            // Load and parse the CSV file
+            d3.csv('../data/random_data.csv').then(data => {
+                data.forEach(d => {
+                    const latitude = parseFloat(d.latitude);
+                    const longitude = parseFloat(d.longitude);
+                    const numSerials = parseInt(d.num_serials, 10);
+
+                    // Convert latitude and longitude to 3D coordinates
+                    const phi = (90 - latitude) * (Math.PI / 180);
+                    const theta = (longitude + 180) * (Math.PI / 180);
+
+                    const x = 5 * Math.sin(phi) * Math.cos(theta);
+                    const y = 5 * Math.cos(phi);
+                    const z = 5 * Math.sin(phi) * Math.sin(theta);
+
+                    // Create a point for each data entry
+                    const pointVertices = [x, y, z];
+                    const pointColors = [1.0, 0.0, 0.0, 1.0];
+
+                    // Add point to the sphere vertices and colors
+                    sphere.vertices = new Float32Array([...sphere.vertices, ...pointVertices]);
+                    sphere.colors = new Float32Array([...sphere.colors, ...pointColors]);
+                });
+
+                const buffers = initBuffers(gl);
+                drawScene(gl, programInfo, buffers);
+            });
+        } else {
+            console.error('Failed to compile vertex or fragment shader.');
+        }
+    </script>
+</body>
+</html>
