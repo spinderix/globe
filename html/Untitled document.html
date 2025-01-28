@@ -1,0 +1,104 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Interactive 3D Globe</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #001220, #000000);
+        }
+        #globeContainer {
+            width: 100vw;
+            height: 100vh;
+        }
+        .glow {
+            animation: pulsate 2s infinite;
+        }
+        @keyframes pulsate {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+            100% { filter: brightness(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="globeContainer"></div>
+
+
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script>
+        // Random sample data (cities with population)
+        const data = [
+            { lat: 40.7128, lng: -74.0060, name: 'New York', population: 8398748 },
+            { lat: 51.5074, lng: -0.1278, name: 'London', population: 8908081 },
+            { lat: 35.6762, lng: 139.6503, name: 'Tokyo', population: 9273000 },
+            { lat: -33.8688, lng: 151.2093, name: 'Sydney', population: 5312000 }
+        ];
+
+
+        // Initialize globe
+        const globe = Globe()
+            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+            .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+            .showAtmosphere(true)
+            .atmosphereColor('rgba(63, 201, 255, 0.3)')
+            .pointsData(data)
+            .pointAltitude(d => d.population * 1e-5)
+            .pointColor(() => '#00ff88')
+            .pointRadius(0.25)
+            .labelsData(data)
+            .labelText(d => d.name)
+            .labelSize(d => Math.sqrt(d.population) * 4e-3)
+            .labelColor(() => 'rgba(255, 165, 0, 0.75)')
+            .labelResolution(2)
+            .onPointClick((point) => {
+                globe.pointOfView({
+                    lat: point.lat,
+                    lng: point.lng,
+                    altitude: 1.5
+                }, 1000);
+            })
+            (document.getElementById('globeContainer'));
+
+
+        // Add auto-rotation
+        globe.controls().autoRotate = true;
+        globe.controls().autoRotateSpeed = 0.8;
+
+
+        // Add ambient light
+        globe.scene().children[0].children[0].children[0].material = new THREE.MeshPhongMaterial({
+            color: 0xffffff,
+            emissive: 0x072534,
+            shininess: 0.9
+        });
+
+
+        // Add particle effects
+        const PARTICLE_NUM = 1000;
+        const particles = new Array(PARTICLE_NUM).fill().map(() => ({
+            lat: (Math.random() - 0.5) * 180,
+            lng: (Math.random() - 0.5) * 360,
+            size: Math.random() * 0.5 + 0.5,
+        }));
+        
+        globe.pointsData(particles)
+            .pointColor(() => `rgba(255,${Math.random() * 255},${Math.random() * 255},0.5)`)
+            .pointRadius(d => d.size);
+
+
+        // Add glow effect
+        const renderer = globe.renderer();
+        renderer.domElement.classList.add('glow');
+
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            globe.width(window.innerWidth);
+            globe.height(window.innerHeight);
+        });
+    </script>
+</body>
+</html>
